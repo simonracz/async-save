@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+</head>
+<body>
+  <div id="log"></div>
+  <output id="error" style="color: red;"></output>
+  <output id="result"></output>
+
+  <script>
+    function onError(e) {
+      document.getElementById('error').textContent = [
+        'ERROR: Line ', e.lineno, ' in ', e.filename, ': ', e.message
+      ].join('');
+    }
+
+    function onMsg(e) {
+      document.getElementById('result').textContent = e.data;
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register("/sw.js", {scope: "./"})
+      .then(function(reg) {
+        ('Registration succeeded. Scope is ' + reg.scope);
+        if(reg.installing) {
+          console.log('Service worker installing');
+        } else if(reg.waiting) {
+          console.log('Service worker installed');
+        } else if(reg.active) {
+          console.log('Service worker active');
+        }
+        reg.update(); // for development
+
+
+        console.log("sending msg to serviceworker");
+        const {port, answer} = msgToSw({filename: "test.txt", size: 100000000});
+        answer.then(data => {
+          const url = data.downloadLink;
+          console.log(url);
+          let link = document.createElement('a');
+          let click = new MouseEvent('click');
+          link.href = url;
+          link.dispatchEvent(click);
+          setTimeout(() => sendData(port), 1000);
+          /*
+          const a = document.createElement('a');
+          a.href = url;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => sendData(port), 5000);
+          */
+        });
+      }).catch(function(error) {
+        console.log('Registration failed with ' + error);
+      });
+    } else {
+      onError("ServiceWorkers are not supported");
+    }
+
+    function msgToSw(msg) {
+      const channel = new MessageChannel();
+
+      return {
+        port: channel.port1,
+        answer: new Promise((resolve, reject) => {
+            channel.port1.onmessage = function(event) {
+              console.log("answer : ");
+              console.log(event.data);
+              if (event.data === undefined) {
+                reject('bad response from serviceWorker');
+              } else if (event.data.error !== undefined) {
+                reject(event.data.error);
+              } else {
+                // channel.port1.onmessage = undefined;
+                resolve(event.data);
+              }
+            };
+            navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller.postMessage(msg, [channel.port2]));
+          })
+      }
+    }
+
+    async function sendData(port) {
+      console.log("sending data");
+      for (var i=0; i<100; i++) {
+        let data = new Uint8Array(1000000);
+        data[0] = i;
+        await new Promise((resolve, reject) => {
+          port.onmessage = function(event) {
+            console.log(event.data);
+            if (event.data.enqueued) {
+              resolve();
+            } else {
+              reject();
+            }
+          };
+          port.postMessage({data: data.buffer}, [data.buffer]);
+        });
+      }
+      port.postMessage("end");
+    }
+
+  </script>
+</body>
+</html>
