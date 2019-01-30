@@ -20,9 +20,9 @@
     }
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register("/sw.js", {scope: "./"})
+      navigator.serviceWorker.register("/sw.js")
       .then(function(reg) {
-        ('Registration succeeded. Scope is ' + reg.scope);
+        console.log('Registration succeeded. Scope is ' + reg.scope);
         if(reg.installing) {
           console.log('Service worker installing');
         } else if(reg.waiting) {
@@ -30,11 +30,11 @@
         } else if(reg.active) {
           console.log('Service worker active');
         }
-        reg.update(); // for development
+        // reg.update(); // for development
 
 
         console.log("sending msg to serviceworker");
-        const {port, answer} = msgToSw({filename: "test.txt", size: 100000000});
+        const {port, answer} = msgToSw({filename: "test.txt", size: 1000000000});
         answer.then(data => {
           const url = data.downloadLink;
           console.log(url);
@@ -76,15 +76,26 @@
                 resolve(event.data);
               }
             };
-            navigator.serviceWorker.ready.then(() => navigator.serviceWorker.controller.postMessage(msg, [channel.port2]));
-          })
-      }
+            navigator.serviceWorker.ready.then(reg => {
+              console.log("reg after ready");
+              if (reg.installing) {
+                console.log('Service worker installing - after ready');
+              } else if (reg.waiting) {
+                console.log('Service worker installed - after ready');
+              } else if (reg.active) {
+                console.log('Service worker active - after ready');
+              }
+              console.log(reg.active);
+              reg.active.postMessage(msg, [channel.port2]);
+            });
+        })
+      };
     }
 
     async function sendData(port) {
       console.log("sending data");
       for (var i=0; i<100; i++) {
-        let data = new Uint8Array(1000000);
+        let data = new Uint8Array(10000000);
         data[0] = i;
         await new Promise((resolve, reject) => {
           port.onmessage = function(event) {
