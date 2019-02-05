@@ -20,6 +20,7 @@
     }
 
     if ('serviceWorker' in navigator) {
+      // TODO
       navigator.serviceWorker.register("/sw.js")
       .then(function(reg) {
         console.log('Registration succeeded. Scope is ' + reg.scope);
@@ -34,7 +35,7 @@
 
 
         console.log("sending msg to serviceworker");
-        const {port, answer} = msgToSw({filename: "test.txt", size: 1000000000});
+        const {port, answer} = msgToSw({filename: "test.txt", size: 10000000000});
         answer.then(data => {
           const url = data.downloadLink;
           console.log(url);
@@ -65,8 +66,6 @@
         port: channel.port1,
         answer: new Promise((resolve, reject) => {
             channel.port1.onmessage = function(event) {
-              console.log("answer : ");
-              console.log(event.data);
               if (event.data === undefined) {
                 reject('bad response from serviceWorker');
               } else if (event.data.error !== undefined) {
@@ -76,16 +75,10 @@
                 resolve(event.data);
               }
             };
+            channel.port1.onmessageerror = () => {
+              console.log("received onmessageerror");
+            };
             navigator.serviceWorker.ready.then(reg => {
-              console.log("reg after ready");
-              if (reg.installing) {
-                console.log('Service worker installing - after ready');
-              } else if (reg.waiting) {
-                console.log('Service worker installed - after ready');
-              } else if (reg.active) {
-                console.log('Service worker active - after ready');
-              }
-              console.log(reg.active);
               reg.active.postMessage(msg, [channel.port2]);
             });
         })
@@ -95,13 +88,16 @@
     async function sendData(port) {
       console.log("sending data");
       for (var i=0; i<100; i++) {
-        let data = new Uint8Array(10000000);
+        // On Firefox the sw gets terminated without regular pokes at its interface
+        navigator.serviceWorker.controller.postMessage("ping");
+        let data = new Uint8Array(100000000);
         data[0] = i;
         await new Promise((resolve, reject) => {
-          port.onmessage = function(event) {
+          port.onmessage = event => {
             console.log(event.data);
             if (event.data.enqueued) {
               resolve();
+              port.onmessage = undefined;
             } else {
               reject();
             }
@@ -110,6 +106,7 @@
         });
       }
       port.postMessage("end");
+      port.close();
     }
 
   </script>

@@ -11,37 +11,41 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('message', event => {
-  console.log('message at sw');
-  console.log(event);
+  if (event.data === 'ping') {
+    return;
+  }
+  // console.log('message at sw');
   const uniqueLink = self.registration.scope + "/local-download/" + Math.random();
   const port = event.ports[0];
   const stream = new ReadableStream({
     start (controller) {
       port.onmessage = ({ data }) => {
-        console.log("got message ");
+        //console.log("got message ");
 
         if (data === 'end') {
+          console.log('End of the download');
           map.delete(uniqueLink);
+          port.close();
           return controller.close();
         }
 
         if (data === 'abort') {
+          console.log('Aborted the download');
           controller.error('Aborted the download');
           map.delete(uniqueLink);
+          port.close();
           return;
         }
-        // console.log(data.data);
         const realData = new Uint8Array(data.data);
-        // console.log(realData.length);
         controller.enqueue(realData);
-        // console.log(controller.desiredSize);
-        if (controller.desiredSize > 0) {
-          port.postMessage({enqueued: true});
-        }
-      }
+      };
+      port.onmessageerror = () => {
+        console.log("received onmessageerror in sw");
+      };
     },
-    pull() {
-      // console.log("at pull");
+    pull(controller) {
+      // On Firefox this is called multiple times.
+      // Fetch doesn't seem to support backpressure
       port.postMessage({enqueued: true});
     },
     cancel () {
